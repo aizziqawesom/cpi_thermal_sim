@@ -262,47 +262,42 @@ def suhir_interface_stress(
     T_ref: float = 150.0
 ) -> dict:
 
-    L      = geometry.die_size / 2 * 1e-3         # half die length [m]
-    h_die  = geometry.die_thickness * 1e-3         # [m]
-    h_sub  = geometry.substrate_thickness * 1e-3   # [m]
-    h_uf   = max(geometry.underfill_thickness * 1e-6, 1e-5)  # [m]
+    L      = geometry.die_size / 2 * 1e-3
+    h_die  = geometry.die_thickness * 1e-3
+    h_sub  = geometry.substrate_thickness * 1e-3
+    h_uf   = max(geometry.underfill_thickness * 1e-6, 1e-5)
 
-    # Plane-stress moduli [Pa]
-    E1 = die.E_pa / (1.0 - die.nu)
-    E2 = substrate.E_pa / (1.0 - substrate.nu)
-
-    # CTE mismatch [/°C]
     d_alpha = substrate.CTE_si - die.CTE_si
 
-    # Suhir axial stiffness parameter [Pa/m]
-    # beta = (E1*h1 + E2*h2) / (E1*h1 * E2*h2) ... simplified as:
-    K_ax = (E1 * h_die * E2 * h_sub) / (E1 * h_die + E2 * h_sub)
+    # Axial compliances per unit width [m/N]
+    a1 = 1.0 / (die.E_pa * h_die)
+    a2 = 1.0 / (substrate.E_pa * h_sub)
 
-    # Underfill shear modulus [Pa]
+    # Underfill shear stiffness [N/m³]
     G_uf = underfill.E_pa / (2.0 * (1.0 + underfill.nu))
+    ka   = G_uf / h_uf
 
     # Suhir characteristic parameter [1/m]
-    # lambda = sqrt(G_uf / h_uf * (1/(E1*h1) + 1/(E2*h2)))
-    beta = G_uf / h_uf * (1.0 / (E1 * h_die) + 1.0 / (E2 * h_sub))
-    lambda_s = np.sqrt(beta)
+    lambda_s = np.sqrt(ka * (a1 + a2))
 
-    # Peak shear stress at die edge [Pa]
-    # tau_max = d_alpha * dT * K_ax * tanh(lambda*L) / lambda  ... Suhir 1986
-    tau_max_Pa = d_alpha * delta_T * K_ax * np.tanh(lambda_s * L) / lambda_s
+    # Effective axial stiffness [N/m]
+    Ee_he = 1.0 / (a1 + a2)
+
+    # Peak shear stress at die edge [Pa] — Zhang et al. (2005)
+    tau_max_Pa  = d_alpha * delta_T * Ee_he * lambda_s / 2.0
     tau_max_MPa = abs(tau_max_Pa) / 1e6
 
-    # Peel stress [MPa] — simplified
+    # Peel stress
     sigma_peel_MPa = tau_max_MPa * 0.35
 
     # Von Mises
     sigma_vm = np.sqrt(3.0 * tau_max_MPa**2 + sigma_peel_MPa**2)
 
     # Distribution along half-span
-    x_arr = np.linspace(0, geometry.die_size / 2, 200)
-    x_m = x_arr * 1e-3
-    tau_dist = np.abs(d_alpha * delta_T * K_ax *
-                      np.sinh(lambda_s * x_m) /
-                      (np.cosh(lambda_s * L) * lambda_s)) / 1e6
+    x_arr    = np.linspace(0, geometry.die_size / 2, 200)
+    x_m      = x_arr * 1e-3
+    # tau(x) proportional to sinh(lambda*x)/cosh(lambda*L), normalised to tau_max
+    tau_dist = tau_max_MPa * np.sinh(lambda_s * x_m) / np.cosh(lambda_s * L)
 
     # Corner shear strain
     gamma_max = abs(d_alpha) * abs(delta_T) * geometry.DNP_max * 1e-3
