@@ -259,85 +259,72 @@ def suhir_interface_stress(
     underfill: Material,
     geometry: PackageGeometry,
     delta_T: float,
-    T_ref: float = 150.0  # stress-free temp (underfill cure temp)
+    T_ref: float = 150.0
 ) -> dict:
-    """
-    Suhir's analytical model for interfacial shear and peel stress
-    in a flip-chip assembly due to CTE mismatch.
+    # Units
+    L      = geometry.die_size / 2 * 1e-3        # half-length [m]
+    h_die  = geometry.die_thickness * 1e-3        # [m]
+    h_sub  = geometry.substrate_thickness * 1e-3  # [m]
+    h_uf   = geometry.underfill_thickness * 1e-6  # [m]
+    h_bump = geometry.bump_height * 1e-6          # [m]
 
-    Based on: Suhir (1986, 1989) bi-material strip model adapted for
-    flip-chip with compliant underfill interlayer.
-
-    Returns shear stress [MPa], peel stress [MPa], and warpage [µm].
-    """
-    # Convert units
-    dT = delta_T  # °C (already signed)
-    L = geometry.die_size / 2 * 1e-3  # half-length [m]
-    h_die = geometry.die_thickness * 1e-3
-    h_sub = geometry.substrate_thickness * 1e-3
-    h_uf  = geometry.underfill_thickness * 1e-6  # µm → m
-    h_bump = geometry.bump_height * 1e-6
-
-    # Plane stress moduli
-    E1 = die.E_pa / (1 - die.nu)       # die (stiff)
-    E2 = substrate.E_pa / (1 - substrate.nu)  # substrate
-    E_uf = underfill.E_pa
+    # Plane-stress moduli [Pa]
+    E1 = die.E_pa / (1 - die.nu)
+    E2 = substrate.E_pa / (1 - substrate.nu)
 
     # CTE mismatch
-    d_alpha = (substrate.CTE_si - die.CTE_si)  # substrate expands more
+    d_alpha = substrate.CTE_si - die.CTE_si  # [/°C]
 
-    # Axial compliance of each layer
-    D1 = h_die / E1   # [m/Pa]
+    # Axial compliances [m/Pa]
+    D1 = h_die / E1
     D2 = h_sub / E2
 
-    # Shear compliance of underfill + solder bump layer
-    # Model underfill+bump as combined shear spring
-    h_adhesive = h_uf + h_bump / 2
+    # Underfill shear modulus [Pa]
+    h_adhesive = max(h_uf + h_bump / 2, 1e-6)  # guard zero
     G_uf = underfill.E_pa / (2 * (1 + underfill.nu))
-    lambda_s = np.sqrt(G_uf / (h_adhesive * (D1 + D2)))  # characteristic length [1/m]
-    if lambda_s < 1e-6:
-        lambda_s = 1e-6
-    # Suhir shear stress distribution
-    # tau(x) = K * sinh(lambda * x) / cosh(lambda * L)
-    # K = E1*E2 * d_alpha * dT / (E1*h_die + E2*h_sub) * correction
-    numerator = d_alpha * dT
-    denominator = (D1 + D2)
-    K = numerator / denominator * G_uf / (h_adhesive * lambda_s)
 
-    # Max shear at edge (x = L)
-    tau_max_Pa = K * np.tanh(lambda_s * L)
-    tau_max_Pa = np.clip(tau_max_Pa, -500e6, 500e6)
-    tau_max_MPa = tau_max_Pa / 1e6
+    # Suhir characteristic decay parameter [1/m]
+    lambda_s = np.sqrt(G_uf / (h_adhesive * (D1 + D2)))
+    lambda_s = max(lambda_s, 1.0)  # physical minimum ~1 m⁻¹
 
-    # Peel stress (normal stress, simplified Suhir)
-    # Peak at die corner — proportional to shear but modified by bending stiffness
-    kappa = (E1 * h_die**3 + E2 * h_sub**3) / 12  # bending stiffness sum
-    sigma_peel_MPa = min(abs(tau_max_MPa) * (lambda_s * L) * 0.6, 300.0)  # empirical factor from lit.
+    # Peak shear stress at die edge — correct Suhir form
+    # tau_max = (d_alpha * dT) / (D1 + D2) * tanh(lambda * L) / lambda
+    # Units: [/°C * °C] / [m/Pa] * [dimensionless] / [1/m] = Pa
+    tau_max_Pa = (d_alpha * delta_T) / (D1 + D2) * np.tanh(lambda_s * L) / lambda_s
+    tau_max_MPa = abs(tau_max_Pa) / 1e6
 
-    # Shear stress distribution along interface
+    # Clamp to physically reasonable range
+    tau_max_MPa = min(tau_max_MPa, 200.0)
+
+    # Peel stress — simplified Suhir (empirical factor 0.3–0.6 from literature)
+    sigma_peel_MPa = min(tau_max_MPa * 0.4, 100.0)
+
+    # Von Mises
+    sigma_vm = np.sqrt(3 * tau_max_MPa**2 + sigma_peel_MPa**2)
+
+    # Shear stress distribution along die half-span
     x_arr = np.linspace(0, geometry.die_size / 2, 200)  # mm
-    x_m = x_arr * 1e-3  # m
-    tau_dist = K * np.sinh(lambda_s * x_m) / np.cosh(lambda_s * L) / 1e6  # MPa
+    x_m   = x_arr * 1e-3
+    tau_dist = ((d_alpha * delta_T) / (D1 + D2) *
+                np.sinh(lambda_s * x_m) /
+                (np.cosh(lambda_s * L) * lambda_s)) / 1e6
+    tau_dist = np.clip(np.abs(tau_dist), 0, 200.0)
 
-    # Von Mises equivalent stress at die corner
-    sigma_vm = np.sqrt(tau_max_MPa**2 * 3 + sigma_peel_MPa**2)
-
-    # Distance to neutral point stress scaling
+    # Corner shear strain
     DNP = geometry.DNP_max  # mm
-    gamma_max = d_alpha * abs(dT) * DNP * 1e-3  # shear strain at corner
+    gamma_max = abs(d_alpha) * abs(delta_T) * DNP * 1e-3
 
     return {
-        'tau_max_MPa': abs(tau_max_MPa),
-        'sigma_peel_MPa': abs(sigma_peel_MPa),
-        'sigma_vm_MPa': sigma_vm,
-        'lambda_1_m': lambda_s,
+        'tau_max_MPa':             tau_max_MPa,
+        'sigma_peel_MPa':          sigma_peel_MPa,
+        'sigma_vm_MPa':            sigma_vm,
+        'lambda_1_m':              lambda_s,
         'characteristic_length_mm': 1 / lambda_s * 1e3,
-        'x_arr_mm': x_arr,
-        'tau_dist_MPa': np.abs(tau_dist),
-        'gamma_max': gamma_max,
-        'd_alpha_ppm': d_alpha * 1e6,
+        'x_arr_mm':                x_arr,
+        'tau_dist_MPa':            tau_dist,
+        'gamma_max':               gamma_max,
+        'd_alpha_ppm':             d_alpha * 1e6,
     }
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Solder Joint Fatigue Life (Engelmaier Model)
