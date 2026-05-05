@@ -285,16 +285,13 @@ def suhir_interface_stress(
 
     # Suhir characteristic decay parameter [1/m]
     lambda_s = np.sqrt(G_uf / (h_adhesive * (D1 + D2)))
-    lambda_s = max(lambda_s, 1.0)  # physical minimum ~1 m⁻¹
+    lambda_s = max(lambda_s, 0.01) # physical minimum ~1 m⁻¹
 
     # Peak shear stress at die edge — correct Suhir form
     # tau_max = (d_alpha * dT) / (D1 + D2) * tanh(lambda * L) / lambda
     # Units: [/°C * °C] / [m/Pa] * [dimensionless] / [1/m] = Pa
     tau_max_Pa = (d_alpha * delta_T) / (D1 + D2) * np.tanh(lambda_s * L) / lambda_s
     tau_max_MPa = abs(tau_max_Pa) / 1e6
-
-    # Clamp to physically reasonable range
-    tau_max_MPa = min(tau_max_MPa, 200.0)
 
     # Peel stress — simplified Suhir (empirical factor 0.3–0.6 from literature)
     sigma_peel_MPa = min(tau_max_MPa * 0.4, 100.0)
@@ -307,8 +304,8 @@ def suhir_interface_stress(
     x_m   = x_arr * 1e-3
     tau_dist = ((d_alpha * delta_T) / (D1 + D2) *
                 np.sinh(lambda_s * x_m) /
-                (np.cosh(lambda_s * L) * lambda_s)) / 1e6
-    tau_dist = np.clip(np.abs(tau_dist), 0, 200.0)
+                (np.cosh(lambda_s * L) * lambda_s)) / 1e6'
+    tau_dist = np.abs(tau_dist)
 
     # Corner shear strain
     DNP = geometry.DNP_max  # mm
