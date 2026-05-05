@@ -173,15 +173,15 @@ with tab2:
     with col_r:
         st.markdown("#### Thermal Resistance Network")
         r_layers = thermal['R_layers_KW']
-layer_names = ['Silicon Die', 'Underfill', 'Substrate', 'PCB']
-rows = "\n".join([f"| {layer_names[i]} | {r:.4f} |"
-                  for i, r in enumerate(r_layers)])
-st.markdown(f"""
-| Layer | R_th [K/W] |
-|---|---|
-{rows}
-| **Total θ_ja** | **{thermal['R_total_KW']:.3f} K/W** |
-""")
+        layer_names = ['Silicon Die', 'Underfill', 'Substrate', 'PCB']
+        rows = "\n".join([f"| {layer_names[i]} | {r:.4f} |"
+                          for i, r in enumerate(r_layers)])
+        st.markdown(f"""
+        | Layer | R_th [K/W] |
+        |---|---|
+        {rows}
+        | **Total θ_ja** | **{thermal['R_total_KW']:.3f} K/W** |
+        """)
         st.metric("Junction Temperature", f"{thermal['T_junction_C']:.1f}°C")
         st.metric("Case Temperature", f"{thermal['T_case_C']:.1f}°C")
         st.metric("ΔT across stack", f"{thermal['delta_T_C']:.1f}°C")
