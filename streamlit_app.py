@@ -173,15 +173,15 @@ with tab2:
     with col_r:
         st.markdown("#### Thermal Resistance Network")
         r_layers = thermal['R_layers_KW']
-        layer_names = ['Silicon Die', 'Underfill', 'Substrate', 'PCB']
-        rows = "\n".join([f"| {layer_names[i]} | {r:.4f} |" 
-                          for i, r in enumerate(r_layers)])
-        st.markdown(f"""
-        | Layer | R_th [K/W] |
-        |---|---|
-        {rows}
-        | **Total θ_ja** | **{thermal['R_total_KW']:.3f} K/W** |
-        """)
+layer_names = ['Silicon Die', 'Underfill', 'Substrate', 'PCB']
+rows = "\n".join([f"| {layer_names[i]} | {r:.4f} |"
+                  for i, r in enumerate(r_layers)])
+st.markdown(f"""
+| Layer | R_th [K/W] |
+|---|---|
+{rows}
+| **Total θ_ja** | **{thermal['R_total_KW']:.3f} K/W** |
+""")
         st.metric("Junction Temperature", f"{thermal['T_junction_C']:.1f}°C")
         st.metric("Case Temperature", f"{thermal['T_case_C']:.1f}°C")
         st.metric("ΔT across stack", f"{thermal['delta_T_C']:.1f}°C")
@@ -200,7 +200,7 @@ with tab3:
                                 bump_pitch=bump_pitch, bump_height=bump_height,
                                 bump_diameter=int(bump_pitch*0.6),
                                 underfill_thickness=bump_height, mold_thickness=0.0)
-            Nf_vals.append(engelmaier_fatigue_life(die, substrate, g, profile)['N_f_cycles'])
+            Nf_vals.append(engelmaier_fatigue_life(g, die, substrate, profile)['N_f_cycles'])
 
         fig, ax = plt.subplots(figsize=(7, 4))
         ax.plot(die_sizes_plot, Nf_vals, color='#7F77DD', linewidth=2.5)
