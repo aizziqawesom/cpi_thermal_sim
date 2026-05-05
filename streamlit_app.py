@@ -270,6 +270,4 @@ with tab4:
             ['substrate_CTE', 'underfill_E_GPa', 'die_size_mm',
              'tau_max_MPa', 'N_f_cycles', 'warpage_um', 'risk']
         ].reset_index(drop=True)
-        st.dataframe(top5.style.highlight_min(subset=['tau_max_MPa'], color='#d4edda')
-                                .highlight_max(subset=['N_f_cycles'], color='#d4edda'),
-                     use_container_width=True)
+        st.dataframe(top5, use_container_width=True)
