@@ -261,64 +261,63 @@ def suhir_interface_stress(
     delta_T: float,
     T_ref: float = 150.0
 ) -> dict:
-    # Units
-    L      = geometry.die_size / 2 * 1e-3        # half-length [m]
-    h_die  = geometry.die_thickness * 1e-3        # [m]
-    h_sub  = geometry.substrate_thickness * 1e-3  # [m]
-    h_uf   = geometry.underfill_thickness * 1e-6  # [m]
-    h_bump = geometry.bump_height * 1e-6          # [m]
+
+    L      = geometry.die_size / 2 * 1e-3         # half die length [m]
+    h_die  = geometry.die_thickness * 1e-3         # [m]
+    h_sub  = geometry.substrate_thickness * 1e-3   # [m]
+    h_uf   = max(geometry.underfill_thickness * 1e-6, 1e-5)  # [m]
 
     # Plane-stress moduli [Pa]
-    E1 = die.E_pa / (1 - die.nu)
-    E2 = substrate.E_pa / (1 - substrate.nu)
+    E1 = die.E_pa / (1.0 - die.nu)
+    E2 = substrate.E_pa / (1.0 - substrate.nu)
 
-    # CTE mismatch
-    d_alpha = substrate.CTE_si - die.CTE_si  # [/°C]
+    # CTE mismatch [/°C]
+    d_alpha = substrate.CTE_si - die.CTE_si
 
-    # Axial compliances [m/Pa]
-    D1 = h_die / E1
-    D2 = h_sub / E2
+    # Suhir axial stiffness parameter [Pa/m]
+    # beta = (E1*h1 + E2*h2) / (E1*h1 * E2*h2) ... simplified as:
+    K_ax = (E1 * h_die * E2 * h_sub) / (E1 * h_die + E2 * h_sub)
 
     # Underfill shear modulus [Pa]
-    h_adhesive = max(h_uf + h_bump / 2, 1e-6)  # guard zero
-    G_uf = underfill.E_pa / (2 * (1 + underfill.nu))
+    G_uf = underfill.E_pa / (2.0 * (1.0 + underfill.nu))
 
-    # Suhir characteristic decay parameter [1/m]
-    lambda_s = np.sqrt(G_uf / (h_adhesive * (D1 + D2)))
-    lambda_s = max(lambda_s, 0.01) # physical minimum ~1 m⁻¹
+    # Suhir characteristic parameter [1/m]
+    # lambda = sqrt(G_uf / h_uf * (1/(E1*h1) + 1/(E2*h2)))
+    beta = G_uf / h_uf * (1.0 / (E1 * h_die) + 1.0 / (E2 * h_sub))
+    lambda_s = np.sqrt(beta)
 
-    # Peak shear stress at die edge — correct Suhir form
-    # tau_max = (d_alpha * dT) / (D1 + D2) * tanh(lambda * L) / lambda
-    # Units: [/°C * °C] / [m/Pa] * [dimensionless] / [1/m] = Pa
-    tau_max_Pa = (d_alpha * delta_T) / (D1 + D2) * np.tanh(lambda_s * L) / lambda_s
+    # Peak shear stress at die edge [Pa]
+    # tau_max = d_alpha * dT * K_ax * tanh(lambda*L) / lambda  ... Suhir 1986
+    tau_max_Pa = d_alpha * delta_T * K_ax * np.tanh(lambda_s * L) / lambda_s
     tau_max_MPa = abs(tau_max_Pa) / 1e6
 
-    # Peel stress — simplified Suhir (empirical factor 0.3–0.6 from literature)
-    sigma_peel_MPa = min(tau_max_MPa * 0.4, 100.0)
+    # Peel stress [MPa] — simplified
+    sigma_peel_MPa = tau_max_MPa * 0.35
 
     # Von Mises
-    sigma_vm = np.sqrt(3 * tau_max_MPa**2 + sigma_peel_MPa**2)
+    sigma_vm = np.sqrt(3.0 * tau_max_MPa**2 + sigma_peel_MPa**2)
 
-    # Shear stress distribution along die half-span
+    # Distribution along half-span
     x_arr = np.linspace(0, geometry.die_size / 2, 200)
     x_m = x_arr * 1e-3
-    tau_dist = np.abs(((d_alpha * delta_T) / (D1 + D2)) * np.sinh(lambda_s * x_m) / (np.cosh(lambda_s * L) * lambda_s)) / 1e6
+    tau_dist = np.abs(d_alpha * delta_T * K_ax *
+                      np.sinh(lambda_s * x_m) /
+                      (np.cosh(lambda_s * L) * lambda_s)) / 1e6
+
     # Corner shear strain
-    DNP = geometry.DNP_max  # mm
-    gamma_max = abs(d_alpha) * abs(delta_T) * DNP * 1e-3
+    gamma_max = abs(d_alpha) * abs(delta_T) * geometry.DNP_max * 1e-3
 
     return {
-        'tau_max_MPa':             tau_max_MPa,
-        'sigma_peel_MPa':          sigma_peel_MPa,
-        'sigma_vm_MPa':            sigma_vm,
-        'lambda_1_m':              lambda_s,
-        'characteristic_length_mm': 1 / lambda_s * 1e3,
-        'x_arr_mm':                x_arr,
-        'tau_dist_MPa':            tau_dist,
-        'gamma_max':               gamma_max,
-        'd_alpha_ppm':             d_alpha * 1e6,
+        'tau_max_MPa':              tau_max_MPa,
+        'sigma_peel_MPa':           sigma_peel_MPa,
+        'sigma_vm_MPa':             sigma_vm,
+        'lambda_1_m':               lambda_s,
+        'characteristic_length_mm': 1.0 / lambda_s * 1e3,
+        'x_arr_mm':                 x_arr,
+        'tau_dist_MPa':             tau_dist,
+        'gamma_max':                gamma_max,
+        'd_alpha_ppm':              d_alpha * 1e6,
     }
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Solder Joint Fatigue Life (Engelmaier Model)
 # ─────────────────────────────────────────────────────────────────────────────
