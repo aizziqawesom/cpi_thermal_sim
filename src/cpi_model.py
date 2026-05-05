@@ -295,7 +295,8 @@ def suhir_interface_stress(
     h_adhesive = h_uf + h_bump / 2
     G_uf = underfill.E_pa / (2 * (1 + underfill.nu))
     lambda_s = np.sqrt(G_uf / (h_adhesive * (D1 + D2)))  # characteristic length [1/m]
-
+    if lambda_s < 1e-6:
+    lambda_s = 1e-6
     # Suhir shear stress distribution
     # tau(x) = K * sinh(lambda * x) / cosh(lambda * L)
     # K = E1*E2 * d_alpha * dT / (E1*h_die + E2*h_sub) * correction
@@ -305,12 +306,13 @@ def suhir_interface_stress(
 
     # Max shear at edge (x = L)
     tau_max_Pa = K * np.tanh(lambda_s * L)
+    tau_max_Pa = np.clip(tau_max_Pa, -500e6, 500e6)
     tau_max_MPa = tau_max_Pa / 1e6
 
     # Peel stress (normal stress, simplified Suhir)
     # Peak at die corner — proportional to shear but modified by bending stiffness
     kappa = (E1 * h_die**3 + E2 * h_sub**3) / 12  # bending stiffness sum
-    sigma_peel_MPa = tau_max_MPa * (lambda_s * L) * 0.6  # empirical factor from lit.
+    sigma_peel_MPa = min(abs(tau_max_MPa) * (lambda_s * L) * 0.6, 300.0)  # empirical factor from lit.
 
     # Shear stress distribution along interface
     x_arr = np.linspace(0, geometry.die_size / 2, 200)  # mm
