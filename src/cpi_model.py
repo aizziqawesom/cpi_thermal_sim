@@ -296,7 +296,7 @@ def suhir_interface_stress(
     G_uf = underfill.E_pa / (2 * (1 + underfill.nu))
     lambda_s = np.sqrt(G_uf / (h_adhesive * (D1 + D2)))  # characteristic length [1/m]
     if lambda_s < 1e-6:
-    lambda_s = 1e-6
+        lambda_s = 1e-6
     # Suhir shear stress distribution
     # tau(x) = K * sinh(lambda * x) / cosh(lambda * L)
     # K = E1*E2 * d_alpha * dT / (E1*h_die + E2*h_sub) * correction
