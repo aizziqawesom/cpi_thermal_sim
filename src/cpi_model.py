@@ -300,13 +300,9 @@ def suhir_interface_stress(
     sigma_vm = np.sqrt(3 * tau_max_MPa**2 + sigma_peel_MPa**2)
 
     # Shear stress distribution along die half-span
-    x_arr = np.linspace(0, geometry.die_size / 2, 200)  # mm
-    x_m   = x_arr * 1e-3
-    tau_dist = ((d_alpha * delta_T) / (D1 + D2) *
-                np.sinh(lambda_s * x_m) /
-                (np.cosh(lambda_s * L) * lambda_s)) / 1e6'
-    tau_dist = np.abs(tau_dist)
-
+    x_arr = np.linspace(0, geometry.die_size / 2, 200)
+    x_m = x_arr * 1e-3
+    tau_dist = np.abs(((d_alpha * delta_T) / (D1 + D2)) * np.sinh(lambda_s * x_m) / (np.cosh(lambda_s * L) * lambda_s)) / 1e6
     # Corner shear strain
     DNP = geometry.DNP_max  # mm
     gamma_max = abs(d_alpha) * abs(delta_T) * DNP * 1e-3
