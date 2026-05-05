@@ -268,7 +268,7 @@ with tab4:
         st.markdown("#### Top 5 Configurations (lowest stress + highest life)")
         top5 = df_doe.nlargest(5, 'N_f_cycles')[
             ['substrate_CTE', 'underfill_E_GPa', 'die_size_mm',
-             'tau_max_MPa', 'N_f_cycles', 'warpage_abs_um', 'risk']
+             'tau_max_MPa', 'N_f_cycles', 'warpage_um', 'risk']
         ].reset_index(drop=True)
         st.dataframe(top5.style.highlight_min(subset=['tau_max_MPa'], color='#d4edda')
                                 .highlight_max(subset=['N_f_cycles'], color='#d4edda'),
